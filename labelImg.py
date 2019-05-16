@@ -1283,7 +1283,6 @@ class MainWindow(QMainWindow, WindowMixin):
                     name = read.shapes[i][0]
                     if name not in keyFrameLabels:
                         break
-                    print(name)
                     newPoints, newAngle = self.calcPoints(keyFrameLabels[name]["points"], keyFrameLabels[name]["angle"], keyFrameLabels[name]["ratioCenterx"] * counter, keyFrameLabels[name]["ratioCentery"] * counter, keyFrameLabels[name]["ratioW"] * counter, keyFrameLabels[name]["ratioH"] * counter, keyFrameLabels[name]["ratioAngle"] * counter)
                     if newAngle < 0:
                         newAngle = newAngle + (2 * math.pi)
