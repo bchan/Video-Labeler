@@ -893,53 +893,6 @@ class MainWindow(QMainWindow, WindowMixin):
         for item, shape in self.itemsToShapes.items():
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
-    def saveInterpolatedLabels(self, annotationFilePath, shapes, labelFile):
-        annotationFilePath = ustr(annotationFilePath)
-
-        s = []
-        for label, points, direction, isRotated, line_color, fill_color, difficult in shapeTuple:
-            shape = Shape(label=label)
-            for x, y in points:
-                #print(x, y)
-                shape.addPoint(QPointF(x, y))
-            shape.difficult = difficult
-            shape.direction = direction
-            shape.isRotated = isRotated
-            shape.close()
-            s.append(shape)
-            self.addLabel(shape)
-
-        def format_shape(s):
-            return dict(label=s.label,
-                        line_color=s.line_color.getRgb()
-                        if s.line_color != self.lineColor else None,
-                        fill_color=s.fill_color.getRgb()
-                        if s.fill_color != self.fillColor else None,
-                        points=[(p.x(), p.y()) for p in s.points],
-                       # add chris
-                        difficult = s.difficult,
-                        # You Hao 2017/06/21
-                        # add for rotated bounding box
-                        direction = s.direction,
-                        center = s.center,
-                        isRotated = s.isRotated)
-
-        shapes = [format_shape(shape) for shape in s]
-        # Can add differrent annotation formats here
-        try:
-            if self.usingPascalVocFormat is True:
-                print ('Img: ' + self.filePath + ' -> Its xml: ' + annotationFilePath)
-                self.labelFile.savePascalVocFormat(annotationFilePath, shapes, self.filePath, self.imageData,
-                                                   self.lineColor.getRgb(), self.fillColor.getRgb())
-            else:
-                self.labelFile.save(annotationFilePath, shapes, self.filePath, self.imageData,
-                                    self.lineColor.getRgb(), self.fillColor.getRgb())
-            return True
-        except LabelFileError as e:
-            self.errorMessage(u'Error saving label data',
-                              u'<b>%s</b>' % e)
-            return False
-
     def findClosestKeyFrame(self):
         lenPath = len(self.filePath.split("/"))
         frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
@@ -986,7 +939,9 @@ class MainWindow(QMainWindow, WindowMixin):
         interpolate = False
 
         # TODO: make more general
-        currentFrame = int(imageFilePath[-9:][:5])
+        lenPath = len(imageFilePath.split("/"))
+        frameStr = imageFilePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
+        currentFrame = int(frameStr)
 
         s = []
         for label, points, direction, isRotated, line_color, fill_color, difficult in shapeTuple:
@@ -1042,7 +997,6 @@ class MainWindow(QMainWindow, WindowMixin):
         read = PascalVocReader(current)
 
         self.saveInterpLabels(new, imageFilePath, read.getShapes(), labelFile.imageData, labelFile)
-        #self.setDirty()
 
     def ratioForCenter(self, centerx1, centery1, centerx2, centery2, timeDiff):
         xRatio = (centerx2 - centerx1) / timeDiff
@@ -1087,13 +1041,13 @@ class MainWindow(QMainWindow, WindowMixin):
         order = p-center;
         cosTheta = math.cos(theta)
         sinTheta = math.sin(theta)
-        #print(order)
+
         pResx = cosTheta * order.x() + sinTheta * order.y()
         pResy = - sinTheta * order.x() + cosTheta * order.y()
         pRes = QPointF(center.x() + pResx, center.y() + pResy)
         return pRes
 
-
+    # Creates a non rotated box with the new width and height and then rotates the points by the new angle.
     def calcPoints(self, points, angle, ratioCenterx, ratioCentery, ratioW, ratioH, ratioAngle):
         width = self.distanceFormula(points[0][0], points[0][1], points[1][0], points[1][1]) / 2
         height = self.distanceFormula(points[1][0], points[1][1], points[2][0], points[2][1]) / 2
@@ -1190,7 +1144,6 @@ class MainWindow(QMainWindow, WindowMixin):
                 newPoints, newAngle = self.calcPoints(readKey.shapes[0][1], readKey.shapes[0][2], ratioCenterx * counter, ratioCentery * counter, ratioW * counter, ratioH * counter, ratioAngle * counter)
                 if newAngle < 0:
                     newAngle = newAngle + (2 * math.pi)
-                print(newAngle)
                 #read.setShapes(newPoints, newAngle)
                 read.shapes.clear()
                 read.shapes.append((name, newPoints, newAngle, True, None, None, False))
@@ -1211,16 +1164,94 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.addLabel(shape)
             self.labelList.repaint()
 
-                # self.labelList.repaint()
-                # self.canvas.update()
-                #self.labelListContainer
+    def appendShape(self, annotationFilePath, imageFilePath, shapeTuple, imageData = None):
+        labelFile = LabelFile()
+        annotationFilePath = ustr(annotationFilePath)
 
+        lineColor = None
+        fillColor = None
+
+        lenPath = len(imageFilePath.split("/"))
+        frameStr = imageFilePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
+        currentFrameNum = int(frameStr)
+        s = []
+        for label, points, direction, isRotated, line_color, fill_color, difficult in shapeTuple:
+            shape = Shape(label=label)
+
+            for x, y in points:
+                shape.addPoint(QPointF(x, y))
+            shape.difficult = difficult
+            shape.direction = direction
+            shape.isRotated = isRotated
+            shape.close()
+            s.append(shape)
+            # self.addLabel(shape)
+
+        def format_shape(s):
+            return dict(label=s.label,
+                        line_color=s.line_color.getRgb()
+                        if s.line_color != self.lineColor else None,
+                        fill_color=s.fill_color.getRgb()
+                        if s.fill_color != self.fillColor else None,
+                        points=[(p.x(), p.y()) for p in s.points],
+                       # add chris
+                        difficult = s.difficult,
+                        # You Hao 2017/06/21
+                        # add for rotated bounding box
+                        direction = s.direction,
+                        center = s.center,
+                        isRotated = s.isRotated)
+
+        shapes = [format_shape(shape) for shape in s]
+        # Can add differrent annotation formats here
+        # self, filename, shapes, imagePath, imageData, lineColor=None, fillColor=None, databaseSrc=None
+        try:
+            if self.usingPascalVocFormat is True:
+                # print ('Img: ' + self.filePath + ' -> Its xml: ' + annotationFilePath)
+                labelFile.savePascalVocFormat(annotationFilePath, shapes, imageFilePath, imageData,
+                                                   self.lineColor.getRgb(), self.fillColor.getRgb())
+            else:
+                self.labelFile.save(annotationFilePath, shapes, imageFilePath, imageData,
+                                    self.lineColor.getRgb(), self.fillColor.getRgb())
+            return True
+        except LabelFileError as e:
+            self.errorMessage(u'Error saving label data',
+                              u'<b>%s</b>' % e)
+            return False
+
+    def addNewBoxesToOldFrames(self):
+        lenPath = len(self.filePath.split("/"))
+        frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
+        currentFrameNum = int(frameStr)
+        currentFrameNum = currentFrameNum + 1
+        frame = str(currentFrameNum).zfill(len(frameStr))
+        cutNum = len(frame) + 4
+        path = self.filePath[:-cutNum] + frame + ".xml"
+
+        def format_shape(s):
+            return (s.label, [(p.x(), p.y()) for p in s.points], s.direction,
+                    s.isRotated, s.line_color.getRgb() if s.line_color != self.lineColor else None,
+                    s.fill_color.getRgb() if s.fill_color != self.fillColor else None,
+                    s.difficult)
+
+        while os.path.isfile(path):
+            for shape in self.canvas.createdShapes:
+                read = PascalVocReader(path)
+                read.shapes.append(format_shape(shape))
+                self.appendShape(path, path[:-4] + ".jpg", read.getShapes())
+                currentFrameNum = currentFrameNum + 1
+                frame = str(currentFrameNum).zfill(len(frameStr))
+                path = self.filePath[:-cutNum] + frame + ".xml"
+
+        self.canvas.createdShapes.clear()
 
 
     def interpolateFrames(self):
-        print('hello')
         if len(self.canvas.shapes) == 0:
             return
+        if len(self.canvas.createdShapes) is not 0:
+            print('e')
+            self.addNewBoxesToOldFrames()
         closestKeyFrame = self.findClosestKeyFrame()
         if (closestKeyFrame != -1):
             lenPath = len(self.filePath.split("/"))
@@ -1264,7 +1295,8 @@ class MainWindow(QMainWindow, WindowMixin):
                 ratioAngle = self.ratioAngle(angle1, angle2, timeDiff)
                 keyFrameLabels[shape.label] = {"center": (centerx1, centery1), "ratioCenterx": ratioCenterx, "ratioCentery": ratioCentery, "ratioW": ratioW, "ratioH": ratioH, "ratioAngle": ratioAngle, "points": readKey.shapes[i][1], "angle": readKey.shapes[i][2]}
 
-            print(keyFrameLabels)
+
+
 
             counter = 0
             read = PascalVocReader(self.filePath[:-4] + ".xml")
@@ -1273,6 +1305,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 frame = str(i).zfill(len(frameStr))
                 cutNum = len(frame) + 4
                 path = self.filePath[:-cutNum] + frame + ".xml"
+
                 if os.path.isfile(path) is False:
                     continue
                 frameLabelFile = LabelFile(path)
@@ -1282,7 +1315,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 for i, val in enumerate(read.shapes):
                     name = read.shapes[i][0]
                     if name not in keyFrameLabels:
-                        break
+                        continue
                     newPoints, newAngle = self.calcPoints(keyFrameLabels[name]["points"], keyFrameLabels[name]["angle"], keyFrameLabels[name]["ratioCenterx"] * counter, keyFrameLabels[name]["ratioCentery"] * counter, keyFrameLabels[name]["ratioW"] * counter, keyFrameLabels[name]["ratioH"] * counter, keyFrameLabels[name]["ratioAngle"] * counter)
                     if newAngle < 0:
                         newAngle = newAngle + (2 * math.pi)

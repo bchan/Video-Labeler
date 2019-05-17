@@ -77,6 +77,8 @@ class Canvas(QWidget):
 
         self.didChangeShapes = False
         self.movedShapes = set()
+        self.createdShapes = set()
+        self.deletedShapes = set()
 
     def enterEvent(self, ev):
         self.overrideCursor(self._cursor)
@@ -535,7 +537,7 @@ class Canvas(QWidget):
     def deleteSelected(self):
         if self.selectedShape:
             shape = self.selectedShape
-            print(self.shapes)
+            self.deletedShapes.add(shape)
             self.shapes.remove(self.selectedShape)
             self.selectedShape = None
             self.update()
@@ -642,6 +644,7 @@ class Canvas(QWidget):
         # print(self.canDrawRotatedRect)
         self.current.close()
         self.shapes.append(self.current)
+        self.createdShapes.add(self.current)
         self.current = None
         self.setHiding(False)
         self.newShape.emit()
