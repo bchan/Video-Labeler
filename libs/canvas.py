@@ -355,7 +355,7 @@ class Canvas(QWidget):
         self.offsets = QPointF(x1, y1), QPointF(x2, y2)
 
     def boundedMoveVertex(self, pos):
-        print("Moving Vertex")
+        # print("Moving Vertex")
         index, shape = self.hVertex, self.hShape
         point = shape[index]
 

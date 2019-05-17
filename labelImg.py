@@ -893,43 +893,7 @@ class MainWindow(QMainWindow, WindowMixin):
         for item, shape in self.itemsToShapes.items():
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
-    def findClosestKeyFrame(self):
-        lenPath = len(self.filePath.split("/"))
-        frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
-        frameNum = int(frameStr)
-        max = -1
-        for i in self.keyFrames:
-            if i > max and i < frameNum:
-                max = i
-        return max
-
-
-    def calcCenter(self, points):
-        centerx = (points[2][0] + points[0][0]) / 2
-        centery = (points[2][1] + points[0][1]) / 2
-
-        return (centerx, centery)
-
-    def calcNewCoor(self, points, angle, ratio):
-        width = (points[1][0] - points[0][0]) / 2
-        height = (points[2][1] - points[1][1]) / 2
-        centerx = (points[0][0] + width) * ratio
-        centery = (points[1][1] + height) * ratio
-        newXleft = centerx - (width * ratio)
-        newXright = centerx + (width * ratio)
-        newYtop = centery + (height * ratio)
-        newYbot = centery - (height * ratio)
-        newAngle = angle * ratio
-
-        newPoints = []
-        newPoints.append((newXleft, newYtop))
-        newPoints.append((newXright, newYtop))
-        newPoints.append((newXright, newYbot))
-        newPoints.append((newXleft, newYbot))
-
-        return (newPoints, newAngle)
-
-
+    # Saves the interpolated labels. Takes points and then writes to an xml file.
     def saveInterpLabels(self, annotationFilePath, imageFilePath, shapeTuple, imageData, labelFile):
         annotationFilePath = ustr(annotationFilePath)
 
@@ -938,7 +902,6 @@ class MainWindow(QMainWindow, WindowMixin):
 
         interpolate = False
 
-        # TODO: make more general
         lenPath = len(imageFilePath.split("/"))
         frameStr = imageFilePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
         currentFrame = int(frameStr)
@@ -948,9 +911,6 @@ class MainWindow(QMainWindow, WindowMixin):
             shape = Shape(label=label)
 
             for x, y in points:
-                #print(direction)
-                # print(points)
-                # print(self.calcNewCoor(points, 0.5))
                 shape.addPoint(QPointF(x, y))
             shape.difficult = difficult
             shape.direction = direction
@@ -991,12 +951,23 @@ class MainWindow(QMainWindow, WindowMixin):
                               u'<b>%s</b>' % e)
             return False
 
-    def addNextXML(self, source, new, labelFile):
-        current = source[:-4] + ".xml"
-        imageFilePath = new[:-4] + ".jpg"
-        read = PascalVocReader(current)
+    # Finds the closeest key frame to the current.
+    def findClosestKeyFrame(self):
+        lenPath = len(self.filePath.split("/"))
+        frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
+        frameNum = int(frameStr)
+        max = -1
+        for i in self.keyFrames:
+            if i > max and i < frameNum:
+                max = i
+        return max
 
-        self.saveInterpLabels(new, imageFilePath, read.getShapes(), labelFile.imageData, labelFile)
+    # Finds the center of the rectangle.
+    def calcCenter(self, points):
+        centerx = (points[2][0] + points[0][0]) / 2
+        centery = (points[2][1] + points[0][1]) / 2
+
+        return (centerx, centery)
 
     def ratioForCenter(self, centerx1, centery1, centerx2, centery2, timeDiff):
         xRatio = (centerx2 - centerx1) / timeDiff
@@ -1023,10 +994,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 difference = difference + (2 * math.pi)
         return difference / timeDiff
 
-
-    def calculateRatio(self, centerx1, centery1, centerx2, centery2, timeDiff):
-        return (centerx1/centery2) / timeDiff
-
+    # Converts points to a list of tuples.
     def convertPoints(self, points):
         p = []
         for i in points:
@@ -1081,89 +1049,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         return (rotatedPoints, newAngle)
 
-# COME BACK HERE
-    def interpolateFrames2(self):
-        if len(self.canvas.shapes) == 0:
-            return
-        closestKeyFrame = self.findClosestKeyFrame()
-        if (closestKeyFrame != -1):
-            lenPath = len(self.filePath.split("/"))
-            frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
-            currentFrameNum = int(frameStr)
-            #print(currentFrameNum)
-            timeDiff = currentFrameNum - closestKeyFrame
-            ratioCenterx = 0.0
-            ratioCentery = 0.0
-            ratioW = 0.0
-            ratioH = 0.0
-            ratioAngle = 0.0
-            name = ''
-
-            currentPoints = self.convertPoints(self.canvas.shapes[0].points)
-
-            frame = str(closestKeyFrame).zfill(len(frameStr))
-            cutNum = len(frame) + 4
-            path = self.filePath[:-cutNum] + frame + ".xml"
-
-            readKey = PascalVocReader(path)
-
-            centerx1, centery1 = self.calcCenter(readKey.shapes[0][1])
-            centerx2 = self.canvas.shapes[0].center.x()
-            centery2 = self.canvas.shapes[0].center.y()
-            ratioCenterx, ratioCentery = self.ratioForCenter(centerx1, centery1, centerx2, centery2, timeDiff)
-            ratioW, ratioH = self.ratioForWH(readKey.shapes[0][1], currentPoints, timeDiff)
-            angle1 = (readKey.shapes[0][2] - (2 * math.pi)) if readKey.shapes[0][2] > math.pi else readKey.shapes[0][2]
-            angle2 = (self.canvas.shapes[0].direction - (2 * math.pi)) if self.canvas.shapes[0].direction > math.pi else self.canvas.shapes[0].direction
-            ratioAngle = self.ratioAngle(angle1, angle2, timeDiff)
-
-            counter = 0
-            for i in range(closestKeyFrame + 1, currentFrameNum):
-                counter = counter + 1
-                frame = str(i).zfill(len(frameStr))
-                cutNum = len(frame) + 4
-                path = self.filePath[:-cutNum] + frame + ".xml"
-                testpath = self.filePath[:-4] + ".xml"
-                if os.path.isfile(path) is False:
-                    continue
-                frameLabelFile = LabelFile(path)
-                read = PascalVocReader(path)
-                if len(read.shapes) is 0:
-                    continue
-                name = read.shapes[0][0]
-                # if counter == 1:
-                #     centerx1, centery1 = self.calcCenter(read.shapes[0][1])
-                #     centerx2 = self.canvas.shapes[0].center.x()
-                #     centery2 = self.canvas.shapes[0].center.y()
-                #     ratioCenterx, ratioCentery = self.ratioForCenter(centerx1, centery1, centerx2, centery2, timeDiff)
-                #     ratioW, ratioH = self.ratioForWH(read.shapes[0][1], currentPoints, timeDiff)
-                #     angle1 = (read.shapes[0][2] - (2 * math.pi)) if read.shapes[0][2] > math.pi else read.shapes[0][2]
-                #     angle2 = (self.canvas.shapes[0].direction - (2 * math.pi)) if self.canvas.shapes[0].direction > math.pi else self.canvas.shapes[0].direction
-                #     ratioAngle = self.ratioAngle(angle1, angle2, timeDiff)
-
-                #newPoints, newAngle = self.calcNewCoor(read.shapes[0][1], read.shapes[0][2], ratio * counter)
-                newPoints, newAngle = self.calcPoints(readKey.shapes[0][1], readKey.shapes[0][2], ratioCenterx * counter, ratioCentery * counter, ratioW * counter, ratioH * counter, ratioAngle * counter)
-                if newAngle < 0:
-                    newAngle = newAngle + (2 * math.pi)
-                #read.setShapes(newPoints, newAngle)
-                read.shapes.clear()
-                read.shapes.append((name, newPoints, newAngle, True, None, None, False))
-
-
-                #print(read.getShapes())
-
-
-
-                #print (read.shapes[0][2]) #direction
-
-                # print(path)
-                # print(i)
-                os.remove(path)
-                self.saveInterpLabels(path, path[:-4] + ".jpg", read.getShapes(), frameLabelFile.imageData, frameLabelFile)
-            self.labelList.clear()
-            for shape in self.canvas.shapes:
-                self.addLabel(shape)
-            self.labelList.repaint()
-
+    # Adds a shape to the existing xml file.
     def appendShape(self, annotationFilePath, imageFilePath, shapeTuple, imageData = None):
         labelFile = LabelFile()
         annotationFilePath = ustr(annotationFilePath)
@@ -1185,7 +1071,6 @@ class MainWindow(QMainWindow, WindowMixin):
             shape.isRotated = isRotated
             shape.close()
             s.append(shape)
-            # self.addLabel(shape)
 
         def format_shape(s):
             return dict(label=s.label,
@@ -1203,11 +1088,9 @@ class MainWindow(QMainWindow, WindowMixin):
                         isRotated = s.isRotated)
 
         shapes = [format_shape(shape) for shape in s]
-        # Can add differrent annotation formats here
-        # self, filename, shapes, imagePath, imageData, lineColor=None, fillColor=None, databaseSrc=None
+
         try:
             if self.usingPascalVocFormat is True:
-                # print ('Img: ' + self.filePath + ' -> Its xml: ' + annotationFilePath)
                 labelFile.savePascalVocFormat(annotationFilePath, shapes, imageFilePath, imageData,
                                                    self.lineColor.getRgb(), self.fillColor.getRgb())
             else:
@@ -1219,6 +1102,8 @@ class MainWindow(QMainWindow, WindowMixin):
                               u'<b>%s</b>' % e)
             return False
 
+    # If a user adds a box to a previous frame with boxes on the next frame, this carries added boxes
+    # through to the next frames.
     def addNewBoxesToOldFrames(self):
         lenPath = len(self.filePath.split("/"))
         frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
@@ -1245,18 +1130,21 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.canvas.createdShapes.clear()
 
-
+    # Main driver function for interpolating frames.
     def interpolateFrames(self):
         if len(self.canvas.shapes) == 0:
             return
         if len(self.canvas.createdShapes) is not 0:
             print('e')
             self.addNewBoxesToOldFrames()
+
         closestKeyFrame = self.findClosestKeyFrame()
         if (closestKeyFrame != -1):
+            # This section just finds the current frame number.
             lenPath = len(self.filePath.split("/"))
             frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
             currentFrameNum = int(frameStr)
+
             timeDiff = currentFrameNum - closestKeyFrame
 
             ratioCenterx = 0.0
@@ -1266,6 +1154,7 @@ class MainWindow(QMainWindow, WindowMixin):
             ratioAngle = 0.0
             name = ''
 
+            # Adds label and componenets to dictionary if it is moved and is in the key frame.
             keyFrameLabels = {}
             for shape in self.canvas.shapes:
                 if shape.label not in self.canvas.movedShapes:
@@ -1275,16 +1164,21 @@ class MainWindow(QMainWindow, WindowMixin):
                 frame = str(closestKeyFrame).zfill(len(frameStr))
                 cutNum = len(frame) + 4
                 path = self.filePath[:-cutNum] + frame + ".xml"
+
                 readKey = PascalVocReader(path)
 
+                # Finding the index of the shape (if it exists) in the key frame.
                 i = 0
                 for readShape in readKey.shapes:
                     if shape.label == readShape[0]:
                         break
                     i = i + 1
 
+                # Continues if the shape is not in the key frame.
                 if i is len(readKey.shapes):
                     continue
+
+                # Calculates the ratios for each component and the current components.
                 centerx1, centery1 = self.calcCenter(readKey.shapes[i][1])
                 centerx2 = shape.center.x()
                 centery2 = shape.center.y()
@@ -1293,11 +1187,12 @@ class MainWindow(QMainWindow, WindowMixin):
                 angle1 = (readKey.shapes[i][2] - (2 * math.pi)) if readKey.shapes[i][2] > math.pi else readKey.shapes[i][2]
                 angle2 = (shape.direction - (2 * math.pi)) if shape.direction > math.pi else shape.direction
                 ratioAngle = self.ratioAngle(angle1, angle2, timeDiff)
+
+                # Dictionary of labels with the value being a dictionary of compoenents.
                 keyFrameLabels[shape.label] = {"center": (centerx1, centery1), "ratioCenterx": ratioCenterx, "ratioCentery": ratioCentery, "ratioW": ratioW, "ratioH": ratioH, "ratioAngle": ratioAngle, "points": readKey.shapes[i][1], "angle": readKey.shapes[i][2]}
 
-
-
-
+            # Loops through the frames in between the key frame and the current frame.
+            # Multiplies the ratio by the count, creates a new xml, and removes the old one.
             counter = 0
             read = PascalVocReader(self.filePath[:-4] + ".xml")
             for i in range(closestKeyFrame + 1, currentFrameNum):
@@ -1311,12 +1206,16 @@ class MainWindow(QMainWindow, WindowMixin):
                 frameLabelFile = LabelFile(path)
                 read = PascalVocReader(path)
 
-
+                # Loops through all the shapes and checks if it was moved.
                 for i, val in enumerate(read.shapes):
                     name = read.shapes[i][0]
                     if name not in keyFrameLabels:
                         continue
+
+                    # Calculating new points and angle.
                     newPoints, newAngle = self.calcPoints(keyFrameLabels[name]["points"], keyFrameLabels[name]["angle"], keyFrameLabels[name]["ratioCenterx"] * counter, keyFrameLabels[name]["ratioCentery"] * counter, keyFrameLabels[name]["ratioW"] * counter, keyFrameLabels[name]["ratioH"] * counter, keyFrameLabels[name]["ratioAngle"] * counter)
+
+                    # Resolving discontinuity issue.
                     if newAngle < 0:
                         newAngle = newAngle + (2 * math.pi)
 
@@ -1324,11 +1223,22 @@ class MainWindow(QMainWindow, WindowMixin):
 
                 os.remove(path)
                 self.saveInterpLabels(path, path[:-4] + ".jpg", read.getShapes(), frameLabelFile.imageData, frameLabelFile)
+
+            # Updated the shape list on the right.
             self.labelList.clear()
             for shape in self.canvas.shapes:
                 self.addLabel(shape)
             self.labelList.repaint()
 
+    # Adds the next xml file.
+    def addNextXML(self, source, new, labelFile):
+        current = source[:-4] + ".xml"
+        imageFilePath = new[:-4] + ".jpg"
+        read = PascalVocReader(current)
+
+        self.saveInterpLabels(new, imageFilePath, read.getShapes(), labelFile.imageData, labelFile)
+
+    # Finds the previous frame's xml file.
     def findPrevXML(self):
         lenPath = len(self.filePath.split("/"))
         frameStr = self.filePath.split("/")[lenPath - 1].split("e")[1].split(".")[0]
@@ -1342,6 +1252,7 @@ class MainWindow(QMainWindow, WindowMixin):
             cutNum = len(prevFrame) + 4
             return self.filePath[:-cutNum] + prevFrame + ".xml"
 
+    # Checks to see if the previous frame's xml file exists.
     def checkPrevXML(self):
         xmlPath = self.findPrevXML()
         if xmlPath is None:
@@ -1373,7 +1284,6 @@ class MainWindow(QMainWindow, WindowMixin):
             return LabelFile(current)
         else:
             return None
-
 
 
     def loadFile(self, filePath=None):
